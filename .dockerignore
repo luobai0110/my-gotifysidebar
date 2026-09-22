@@ -1,0 +1,10 @@
+*
+!Dockerfile
+!.dockerignore
+!pom.xml
+!mvnw
+!mvnw.cmd
+!.mvn
+!.mvn/**
+!src
+!src/**

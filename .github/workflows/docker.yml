@@ -1,0 +1,73 @@
+name: Build and push native image
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: registry.cn-chengdu.aliyuncs.com
+  IMAGE_NAME: doomer/gotify-sidebar
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate Aliyun ACR credentials
+        shell: bash
+        env:
+          ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME || vars.ALIYUN_ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD || vars.ALIYUN_ACR_PASSWORD }}
+        run: |
+          if [[ -z "$ACR_USERNAME" || -z "$ACR_PASSWORD" ]]; then
+            echo "::error title=Missing Aliyun ACR credentials::Set ALIYUN_ACR_USERNAME and ALIYUN_ACR_PASSWORD as repository/environment secrets, or repository variables."
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Aliyun ACR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ALIYUN_ACR_USERNAME || vars.ALIYUN_ACR_USERNAME }}
+          password: ${{ secrets.ALIYUN_ACR_PASSWORD || vars.ALIYUN_ACR_PASSWORD }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build native image and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
