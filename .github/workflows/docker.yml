@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - dev
     tags:
       - "v*"
   workflow_dispatch:
@@ -29,8 +30,8 @@ jobs:
       - name: Validate Aliyun ACR credentials
         shell: bash
         env:
-          ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME || vars.ALIYUN_ACR_USERNAME }}
-          ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD || vars.ALIYUN_ACR_PASSWORD }}
+          ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
         run: |
           if [[ -z "$ACR_USERNAME" || -z "$ACR_PASSWORD" ]]; then
             echo "::error title=Missing Aliyun ACR credentials::Set ALIYUN_ACR_USERNAME and ALIYUN_ACR_PASSWORD as repository/environment secrets, or repository variables."
@@ -44,8 +45,14 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.ALIYUN_ACR_USERNAME || vars.ALIYUN_ACR_USERNAME }}
-          password: ${{ secrets.ALIYUN_ACR_PASSWORD || vars.ALIYUN_ACR_PASSWORD }}
+          username: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+
+      - name: Generate dev image tag
+        id: dev_tag
+        if: github.ref == 'refs/heads/dev'
+        shell: bash
+        run: echo "tag=$(TZ=Asia/Shanghai date +'%Y%m%d%H%M%S')" >> "$GITHUB_OUTPUT"
 
       - name: Extract image metadata
         id: meta
@@ -53,10 +60,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ steps.dev_tag.outputs.tag || 'dev' }},enable=${{ github.ref == 'refs/heads/dev' }}
             type=ref,event=tag
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build native image and push
         uses: docker/build-push-action@v7
