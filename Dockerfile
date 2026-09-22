@@ -1,4 +1,4 @@
-ARG QUARKUS_NATIVE_BUILDER_IMAGE=quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-21
+ARG QUARKUS_NATIVE_BUILDER_IMAGE=quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25.0.0
 ARG QUARKUS_RUNTIME_IMAGE=quay.io/quarkus/ubi9-quarkus-micro-image:2.0
 
 FROM ${QUARKUS_NATIVE_BUILDER_IMAGE} AS builder
