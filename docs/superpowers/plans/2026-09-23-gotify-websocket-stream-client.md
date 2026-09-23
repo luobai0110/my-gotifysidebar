@@ -31,12 +31,21 @@ $MVN_ARGS=@('-o','-B','-s','C:\Users\yyt\AppData\Local\Temp\dsh-mvn-settings.xml
 
 **本机无法执行 `mvn test`**：本地仓库缺 `org.apache.maven.surefire:surefire-junit-platform`（3.5.6、3.2.5 均缺失），测试只能在联网环境（CI 或开发者本机）运行。本机可执行 `compile` 与 `package`。
 
-**本机的 package 命令一律用 `-Dmaven.test.skip=true` 而不是 `-DskipTests`**：后者仍会编译测试代码，而本机测试依赖不全，会在 test-compile 阶段失败。
+**本机的 package 命令一律用 `"-Dmaven.test.skip=true"` 而不是 `-DskipTests`**：后者仍会编译测试代码，而本机测试依赖不全，会在 test-compile 阶段失败。**注意这个参数必须加引号** —— PowerShell 会把不带引号的 `-Dmaven.test.skip=true` 拆坏，报 `Unknown lifecycle phase ".test.skip=true"`。
+
+**本机可用的验收门是 `compile` 而不是 `package`**：`ListenGotify` 在 Task 6 之前是一个没有任何回调方法的 `@WebSocketClient` 空壳，websockets-next 会在增强阶段直接拒绝它：
+
+```
+WebSocketServerException: The endpoint must declare at least one method annotated with
+@OnTextMessage, @OnBinaryMessage, @OnPingMessage, @OnPongMessage or @OnOpen
+```
+
+所以 `package` 直到 Task 6 结束才能通过；Task 1 用 `compile` 验收。
 
 **下文所有 `./mvnw xxx` 是本机之外的标准命令**；在本机执行时替换为上面前缀，例如：
 
 ```powershell
-mvn @MVN_ARGS package -Dmaven.test.skip=true
+mvn @MVN_ARGS package "-Dmaven.test.skip=true"
 ```
 
 ---
@@ -45,8 +54,8 @@ mvn @MVN_ARGS package -Dmaven.test.skip=true
 
 | 文件 | 职责 |
 | --- | --- |
-| `pom.xml` | 移除 `quarkus-config-yaml`，新增 `quarkus-jackson` |
-| `src/main/resources/application.properties` | 全部配置项（替换空的 `application.yaml`） |
+| `pom.xml` | 新增 `quarkus-jackson`（`quarkus-config-yaml` 保持不动） |
+| `src/main/resources/application.yaml` | 全部配置项 |
 | `src/main/java/com/github/luobai0110/GotifyMessage.java` | 推送消息的 record |
 | `src/main/java/com/github/luobai0110/GotifyConfig.java` | `@ConfigMapping` 配置映射 |
 | `src/main/java/com/github/luobai0110/GotifyConnection.java` | 建连、退避重连、优雅关闭 |
@@ -62,18 +71,20 @@ mvn @MVN_ARGS package -Dmaven.test.skip=true
 
 ---
 
-## Task 1: 恢复可构建状态（依赖与配置介质）
+## Task 1: 依赖与配置基线（YAML 介质）
 
-**背景：** 工作区里有一处未提交的改动把 `application.properties` 重命名成了 `application.yaml` 并加了 `quarkus-config-yaml` 依赖，但本机缺少 `quarkus-config-yaml-deployment` 产物导致无法构建。本任务把它回退为 properties 介质，并加上 JSON 解析所需的 jackson 扩展。
+**背景：** 配置介质选定为 YAML，需要 `quarkus-config-yaml` 与 `quarkus-jackson` 两个扩展同时在 `pom.xml` 里就位。
+
+> **当前进度（修正说明）**：本任务的第一版曾把配置写成 `application.properties` 并移除了 `quarkus-config-yaml`，已提交为 `25a8ec0`。该判断基于一个当时成立、随后失效的观察（当时本地仓库确实缺 `quarkus-config-yaml-deployment`，其后被 IDE 后台下载补齐）。现按选定方案改回 YAML，本任务因此是一次**修正增量**：加回依赖、把配置改成 YAML、删掉 properties。
 
 **Files:**
 - Modify: `pom.xml`
-- Delete: `src/main/resources/application.yaml`
-- Create: `src/main/resources/application.properties`
+- Create: `src/main/resources/application.yaml`
+- Delete: `src/main/resources/application.properties`
 
-- [ ] **Step 1: 修改 pom.xml —— 移除 quarkus-config-yaml**
+- [ ] **Step 1: 修改 pom.xml —— 加回 quarkus-config-yaml**
 
-把 `pom.xml` 中这段（第 55-59 行附近）整块删除：
+`pom.xml` 当前**没有** `quarkus-config-yaml`（第一版把它删掉了）。在 `quarkus-qute` 依赖之后插入：
 
 ```xml
         <dependency>
@@ -82,9 +93,7 @@ mvn @MVN_ARGS package -Dmaven.test.skip=true
         </dependency>
 ```
 
-- [ ] **Step 2: 修改 pom.xml —— 新增 quarkus-jackson**
-
-在 `quarkus-arc` 依赖之后、`quarkus-junit` 之前插入：
+确认 `quarkus-jackson` 仍在（第一版已加入，位于 `quarkus-arc` 之后、`quarkus-junit` 之前）：
 
 ```xml
         <dependency>
@@ -93,50 +102,63 @@ mvn @MVN_ARGS package -Dmaven.test.skip=true
         </dependency>
 ```
 
-- [ ] **Step 3: 删除 application.yaml，创建 application.properties**
+- [ ] **Step 2: 用 application.yaml 替换 application.properties**
 
-删除 `src/main/resources/application.yaml`，新建 `src/main/resources/application.properties`：
+删除 `src/main/resources/application.properties`，新建 `src/main/resources/application.yaml`：
 
-```properties
+```yaml
 # ---- Gotify ----
-# Gotify 服务地址，http(s):// 与 ws(s):// 都支持
-gotify.base-url=${GOTIFY_BASE_URL:http://localhost:8080}
-# Gotify 的 token（必填，留空则启动时记录错误并跳过连接）
-gotify.token=${GOTIFY_TOKEN:}
-# 邮件收件人，多个用逗号分隔
-gotify.mail.to=${GOTIFY_MAIL_TO:}
-# 断线重连的指数退避参数
-gotify.reconnect.initial-delay=1s
-gotify.reconnect.max-delay=60s
-gotify.reconnect.multiplier=2
+gotify:
+  # Gotify 服务地址，http(s):// 与 ws(s):// 都支持
+  base-url: ${GOTIFY_BASE_URL:http://localhost:8080}
+  # Gotify 的 token（必填，留空则启动时记录错误并跳过连接）
+  token: ${GOTIFY_TOKEN:}
+  mail:
+    # 邮件收件人，多个用逗号分隔
+    to: ${GOTIFY_MAIL_TO:}
+  reconnect:
+    # 断线重连的指数退避参数
+    initial-delay: 1s
+    max-delay: 60s
+    multiplier: 2
 
 # ---- SMTP ----
-quarkus.mailer.host=${SMTP_HOST:localhost}
-quarkus.mailer.port=${SMTP_PORT:25}
-quarkus.mailer.username=${SMTP_USERNAME:}
-quarkus.mailer.password=${SMTP_PASSWORD:}
-quarkus.mailer.start-tls=OPTIONAL
-quarkus.mailer.from=${SMTP_FROM:gotify-sidebar@localhost}
+quarkus:
+  mailer:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:25}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    start-tls: OPTIONAL
+    from: ${SMTP_FROM:gotify-sidebar@localhost}
 
 # ---- 测试环境 ----
-%test.gotify.base-url=ws://localhost:8081
-%test.gotify.token=test-token
-%test.gotify.mail.to=test@example.com
-%test.quarkus.mailer.mock=true
+"%test":
+  gotify:
+    base-url: ws://localhost:8081
+    token: test-token
+    mail:
+      to: test@example.com
+  quarkus:
+    mailer:
+      mock: true
 ```
 
-- [ ] **Step 4: 验证构建通过**
+注意 YAML 下 profile 的写法是顶层 `"%test"` 键，**不是** properties 的 `%test.` 前缀。
 
-Run（本机）：`mvn @MVN_ARGS clean package -Dmaven.test.skip=true`
+- [ ] **Step 3: 验证编译通过**
+
+Run（本机）：`mvn @MVN_ARGS compile`
+
 Expected: `BUILD SUCCESS`
 
-（联网环境：`./mvnw clean package -DskipTests`）
+（此处**不能**用 `package`：`ListenGotify` 仍是没有任何回调方法的空壳，websockets-next 会在增强阶段拒绝它，详见文首「本机执行说明」。`package` 的验收放在 Task 6。）
 
-- [ ] **Step 5: 提交**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add -A pom.xml src/main/resources
-git commit -m "chore(构建): 配置介质改用 properties 并引入 quarkus-jackson" -m "本机缺少 quarkus-config-yaml 的 deployment 产物导致无法构建；application.yaml 原本即为空文件，改用 application.properties 后功能完全等价。同时引入 quarkus-jackson 以提供 ObjectMapper。"
+git commit -m "chore(构建): 配置介质改回 YAML" -m "quarkus-config-yaml 的本地产物已补齐，按原定方案恢复 YAML 配置并加回依赖；同时保留第一版引入的 quarkus-jackson。"
 ```
 
 ---
@@ -1066,7 +1088,20 @@ Expected: `Tests run: 1, Failures: 0, Errors: 0`
 Run: `./mvnw test`
 Expected: `Tests run: 8, Failures: 0, Errors: 0`（2 个 `GotifyMessageTest` + 4 个 `GotifyConnectionTest` + 1 个 `GotifyMailNotifierTest` + 1 个 `GotifyStreamTest`）
 
-- [ ] **Step 7: 提交**
+- [ ] **Step 7: 本机验证 —— 打包（CDI 装配与 Qute 构建期解析）**
+
+到这里 `ListenGotify` 已经有回调方法了，**`package` 终于能过** —— 这也是全流程第一次真正校验 CDI 依赖图（循环依赖、`WebSocketConnector<ListenGotify>` 注入点类型）与 `message.html` 的构建期解析。
+
+Run（本机）：
+
+```powershell
+$env:JAVA_HOME='D:\dev\java\jdk-25.0.2+10'
+mvn -o -B -s C:\Users\yyt\AppData\Local\Temp\dsh-mvn-settings.xml "-Daether.enhancedLocalRepository.trackingFilename=_remote.repositories.off" clean package "-Dmaven.test.skip=true"
+```
+
+Expected: `BUILD SUCCESS`
+
+- [ ] **Step 8: 提交**
 
 ```bash
 git add src/main/java/com/github/luobai0110/ListenGotify.java src/main/java/com/github/luobai0110/GotifyConnection.java src/test/java/com/github/luobai0110/GotifyStreamTest.java
@@ -1109,7 +1144,7 @@ Run（本机）：
 
 ```powershell
 $env:JAVA_HOME='D:\dev\java\jdk-25.0.2+10'
-mvn -o -B -s C:\Users\yyt\AppData\Local\Temp\dsh-mvn-settings.xml "-Daether.enhancedLocalRepository.trackingFilename=_remote.repositories.off" clean package -Dmaven.test.skip=true
+mvn -o -B -s C:\Users\yyt\AppData\Local\Temp\dsh-mvn-settings.xml "-Daether.enhancedLocalRepository.trackingFilename=_remote.repositories.off" clean package "-Dmaven.test.skip=true"
 ```
 
 Expected: `BUILD SUCCESS`。`package` 会执行 Quarkus 的增强阶段，从而校验 CDI 依赖图（循环依赖、`WebSocketConnector` 注入点类型等）与 Qute 模板的构建期解析。
@@ -1127,14 +1162,34 @@ Copy-Item "C:\Users\yyt\Documents\workplace\gotify-sidebar\src" $smoke -Recurse
 Set-Location $smoke
 ```
 
-在副本里：把 `FakeGotifyStreamEndpoint.java` 从 `src/test/java` 复制到 `src/main/java`，并在 `src/main/resources/application.properties` 末尾追加：
+在副本里：把 `FakeGotifyStreamEndpoint.java` 从 `src/test/java` 复制到 `src/main/java`，并把 `src/main/resources/application.yaml` 的 `gotify` 段替换为下面这份（同时把 `quarkus.mailer.mock` 打开）：
 
-```properties
-quarkus.mailer.mock=true
-gotify.token=smoke-token
-gotify.mail.to=smoke@example.com
-gotify.base-url=ws://localhost:8080
+```yaml
+# ---- Gotify ----
+gotify:
+  base-url: ws://localhost:8080
+  token: smoke-token
+  mail:
+    to: smoke@example.com
+  reconnect:
+    initial-delay: 1s
+    max-delay: 60s
+    multiplier: 2
+
+# ---- SMTP ----
+quarkus:
+  mailer:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:25}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    start-tls: OPTIONAL
+    from: ${SMTP_FROM:gotify-sidebar@localhost}
+  # 冒烟验证不发真实邮件，用 MockMailbox 收口
+  mailer.mock: true
 ```
+
+（`quarkus.mailer.mock` 与 `quarkus.mailer.host` 同属 `quarkus.mailer`，合并到同一个 `mailer` 节点下即可；原文件里若已有 `"%test"` 段，副本里可以整段删掉。）
 
 再新建 `src/main/java/com/github/luobai0110/SmokeVerifier.java`：
 
@@ -1177,7 +1232,7 @@ public class SmokeVerifier {
 运行：
 
 ```powershell
-mvn -o -B -s C:\Users\yyt\AppData\Local\Temp\dsh-mvn-settings.xml "-Daether.enhancedLocalRepository.trackingFilename=_remote.repositories.off" package -Dmaven.test.skip=true
+mvn -o -B -s C:\Users\yyt\AppData\Local\Temp\dsh-mvn-settings.xml "-Daether.enhancedLocalRepository.trackingFilename=_remote.repositories.off" package "-Dmaven.test.skip=true"
 java -jar target\quarkus-app\quarkus-run.jar
 ```
 
@@ -1212,7 +1267,7 @@ git commit -m "docs(README): 补充 Gotify 与 SMTP 配置说明" -m "列出全�
 2. `./mvnw test` 全部通过（联网环境，共 8 个用例）。
 3. 本机 `package` 通过 —— 证明 CDI 装配与 Qute 构建期解析无误。
 4. 本机冒烟验证输出 `SMOKE-TOTAL=1` —— 证明运行时链路完整。
-5. 工作区中不再有 `application.yaml`，配置集中在 `application.properties`。
+5. 工作区中只有 `application.yaml`，没有 `application.properties`，配置集中且为 YAML 介质。
 
 ## 已知未覆盖项
 
