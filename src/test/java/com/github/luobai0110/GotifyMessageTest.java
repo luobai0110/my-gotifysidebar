@@ -31,7 +31,11 @@ class GotifyMessageTest {
         assertEquals("my title", message.title());
         assertEquals("my message", message.message());
         assertEquals(2, message.priority());
-        assertEquals(OffsetDateTime.parse("2018-02-27T19:36:10.5045044+01:00"), message.date());
+        // Jackson 默认开启 ADJUST_DATES_TO_CONTEXT_TIME_ZONE，会把带偏移量的时间归一化到 UTC
+        //（2018-02-27T19:36:10.5045044+01:00 -> 2018-02-27T18:36:10.5045044Z）。
+        // 瞬时点相同但偏移量不同，而 OffsetDateTime.equals 会比较偏移量，所以这里比较 Instant。
+        assertEquals(OffsetDateTime.parse("2018-02-27T19:36:10.5045044+01:00").toInstant(),
+                message.date().toInstant());
         assertEquals("text/markdown",
                 ((Map<?, ?>) message.extras().get("client::display")).get("contentType"));
     }
