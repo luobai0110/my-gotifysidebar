@@ -1,0 +1,9 @@
+# ---- 测试专用配置 ----
+# 这些值只在 `mvnw test` 时生效，覆盖 src/main/resources/application.yaml。
+
+# 测试不连真实的 Gotify 服务。
+# GotifyConnection 会在启动时建连并按指数退避重试 3 次，
+# 若这里留有 token，每次测试启动都会白等约 25 秒（4 次握手尝试 + 退避）。
+# 留空即走「未配置 token，跳过连接」分支，测试启动显著加快。
+gotify:
+  token: ""
