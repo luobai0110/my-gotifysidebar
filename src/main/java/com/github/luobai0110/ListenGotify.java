@@ -7,6 +7,7 @@ import io.quarkus.websockets.next.OnOpen;
 import io.quarkus.websockets.next.OnTextMessage;
 import io.quarkus.websockets.next.WebSocketClient;
 import io.quarkus.websockets.next.WebSocketClientConnection;
+import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,19 +21,27 @@ public class ListenGotify {
 
     private static final Logger log = LoggerFactory.getLogger(ListenGotify.class);
 
+    @Inject
+    MessageService messageService;
+
     @OnOpen
     public void onOpen(WebSocketClientConnection connection) {
         log.info("Gotify 推送流已建立，连接 ID：{}", connection.id());
     }
 
     /**
-     * 处理 Gotify 下发的一条推送消息。
+     * 处理 Gotify 下发的一条推送消息，委托给 {@link MessageService} 完成入库与转发。
      * <p>
-     * 当前只做日志输出；后续可在此渲染 Qute 模板并发送邮件。
+     * 端点保持轻薄：这里不做业务判断，也不让异常逃逸 —— 任何异常都会中断推送流的消费。
      */
     @OnTextMessage
     public void onMessage(GotifyMessage gotifyMessage, WebSocketClientConnection connection) {
-        log.info("收到 Gotify 消息：{}", gotifyMessage);
+        log.info("收到 Gotify 消息：id={} 优先级={}", gotifyMessage.id(), gotifyMessage.priority());
+        try {
+            messageService.handle(gotifyMessage);
+        } catch (Exception e) {
+            log.error("处理 Gotify 消息 {} 时发生未预期异常", gotifyMessage.id(), e);
+        }
     }
 
     @OnClose
