@@ -1,0 +1,8 @@
+[{label}] {title}
+
+{message}
+
+{#if extrasText}附加信息
+{extrasText}
+
+{/if}应用 #{appId} · 优先级 {priority} · {timeText}

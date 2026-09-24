@@ -2,17 +2,41 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{title}</title>
 </head>
 <body style="margin:0;padding:24px;background:#f5f5f5;font-family:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#24292f;">
 <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #d0d7de;border-radius:8px;overflow:hidden;">
-    <div style="padding:16px 24px;background:#24292f;color:#ffffff;font-size:18px;font-weight:600;">
-        {title}
+
+    <!-- 顶部优先级色条：让收件人在预览列表里就能感知严重程度 -->
+    <div style="height:6px;background:{color};"></div>
+
+    <div style="padding:20px 24px 12px 24px;border-bottom:1px solid #d0d7de;">
+        <div style="display:inline-block;padding:3px 10px;border-radius:12px;background:{color};color:#ffffff;font-size:12px;font-weight:600;letter-spacing:.5px;">
+            优先级 {priority} &middot; {label}
+        </div>
+        <div style="margin-top:10px;font-size:19px;font-weight:600;line-height:1.35;word-break:break-word;">
+            {title}
+        </div>
     </div>
-    <div style="padding:24px;font-size:15px;line-height:1.6;white-space:pre-wrap;">{message}</div>
+
+    <div style="padding:20px 24px;font-size:15px;line-height:1.65;white-space:pre-wrap;word-break:break-word;">
+{message}
+    </div>
+
+    {#if extrasText}
+    <div style="padding:0 24px 20px 24px;">
+        <div style="padding:12px 16px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;">
+            <div style="font-size:12px;font-weight:600;color:#57606a;margin-bottom:6px;">附加信息</div>
+            <div style="font-size:13px;color:#24292f;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;">{extrasText}</div>
+        </div>
+    </div>
+    {/if}
+
     <div style="padding:12px 24px;border-top:1px solid #d0d7de;background:#f6f8fa;color:#57606a;font-size:12px;">
-        优先级 {priority} &middot; 应用 #{appid} &middot; {date}
+        应用 #{appId} &middot; {timeText}
     </div>
+
 </div>
 </body>
 </html>
