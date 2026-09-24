@@ -38,15 +38,18 @@ quarkus:
       # 单条消息上限，防止超大 payload 撑爆内存
       max-message-size: 1048576
 
-  # ---- 数据源（验证期用 H2，文件库便于外部工具查看）----
+  # ---- 数据源（验证期用 H2，文件库便于外部工具查看） ----
   datasource:
     db-kind: h2
     jdbc:
       # 注意：Quarkus 3.39 已移除扁平的 jdbc-url，必须使用嵌套的 jdbc.url，否则该键会被静默忽略
-      url: jdbc:h2:file:./data/gotify;AUTO_SERVER=TRUE
+      # 相对路径的基准是进程工作目录（非项目根），IDE / 容器 / systemd 下可能落到不同位置
+      url: jdbc:h2:file:./data/gotify
+    # 本地 H2 文件库的默认超管账号与空密码；仅限验证期，换真实库时必须改为环境变量注入
     username: sa
     password: ""
 
   hibernate-orm:
-    database:
-      generation: update
+    schema-management:
+      # 验证期由 Hibernate 自动建表；勿与已废弃的 database.generation 同时使用
+      strategy: update

@@ -36,9 +36,12 @@ public interface GotifyConfig {
         Optional<List<String>> to();
 
         /**
-         * 邮件转发优先级阈值：严格大于该值才转发（默认 6，即 7 及以上）。
+         * 邮件转发优先级阈值：严格大于该值才转发（即 7 及以上）。
+         * <p>
+         * 默认值 6 由 {@code application.yaml} 的 {@code ${GOTIFY_MAIL_PRIORITY_THRESHOLD:6}}
+         * 提供。这里刻意不加 {@code @WithDefault} —— YAML 的占位符自带兜底值，该键永远有值，
+         * 再加一个默认值也不会被触发，反而形成两处重复定义、改了不生效的隐患。
          */
-        @WithDefault("6")
         int priorityThreshold();
     }
 
