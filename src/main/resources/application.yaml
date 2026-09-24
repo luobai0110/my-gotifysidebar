@@ -2,8 +2,9 @@
 gotify:
   # Gotify 服务地址，http(s):// 与 ws(s):// 都支持
   base-url: ${GOTIFY_BASE_URL:http://localhost:8080}
-  # Gotify 的 token（必填，留空则启动时记录错误并跳过连接）
-  token: ${GOTIFY_TOKEN:}
+  # 订阅 /stream 用的 Client token（必填，留空则启动时记录错误并跳过连接）
+  # 注意：这里必须是 Client token（Gotify UI → Clients），Application token 会被服务端以 401 拒绝
+  token: ${GOTIFY_CLIENT_TOKEN:}
   mail:
     # 邮件收件人，多个用逗号分隔
     to: ${GOTIFY_MAIL_TO:}
@@ -12,6 +13,8 @@ gotify:
     initial-delay: 1s
     max-delay: 60s
     multiplier: 2
+    # 最大重试次数（不含首次连接）
+    max-retries: 3
 
 # ---- SMTP ----
 quarkus:
@@ -23,13 +26,12 @@ quarkus:
     start-tls: OPTIONAL
     from: ${SMTP_FROM:gotify-sidebar@localhost}
 
-# ---- 测试环境 ----
-"%test":
-  gotify:
-    base-url: ws://localhost:8081
-    token: test-token
-    mail:
-      to: test@example.com
-  quarkus:
-    mailer:
-      mock: true
+  # ---- WebSocket 客户端 ----
+  websockets-next:
+    client:
+      # Gotify /stream 是长连接，依赖心跳探测半开连接
+      auto-ping-interval: 30s
+      # 超过该时长没有任何帧（含 pong）则判定连接已死
+      connection-idle-timeout: 90s
+      # 单条消息上限，防止超大 payload 撑爆内存
+      max-message-size: 1048576

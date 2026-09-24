@@ -55,5 +55,11 @@ public interface GotifyConfig {
          */
         @WithDefault("2")
         int multiplier();
+
+        /**
+         * 最大重试次数（不含首次连接）。
+         */
+        @WithDefault("3")
+        int maxRetries();
     }
 }
