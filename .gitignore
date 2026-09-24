@@ -39,6 +39,12 @@ nb-configuration.xml
 # Local environment
 .env
 
+# 本地验证数据库
+data/
+
+# 沙箱下改用工作区内的 Maven 本地仓库（~/.m2 不可写）
+.m2local/
+
 # Plugin directory
 /.quarkus/cli/plugins/
 # TLS Certificates

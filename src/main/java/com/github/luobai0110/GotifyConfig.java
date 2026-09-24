@@ -34,6 +34,12 @@ public interface GotifyConfig {
          * 收件人列表，多个用逗号分隔。
          */
         Optional<List<String>> to();
+
+        /**
+         * 邮件转发优先级阈值：严格大于该值才转发（默认 6，即 7 及以上）。
+         */
+        @WithDefault("6")
+        int priorityThreshold();
     }
 
     interface Reconnect {
